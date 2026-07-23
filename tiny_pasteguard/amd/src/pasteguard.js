@@ -133,9 +133,12 @@ const currentDecision = (editor) => {
  * Primary hook: TinyMCE PastePreProcess event. Receives the incoming content
  * and cancels insertion by emptying it.
  *
- * Emptying args.content means TinyMCE inserts nothing; because the document
- * is unchanged, the undo manager should record no new level. This is asserted
- * by TESTING.md item 1 and must be confirmed in real browsers, not assumed.
+ * Emptying args.content means TinyMCE inserts nothing; because the document is
+ * unchanged, the undo manager records no new level. Confirmed in a real browser
+ * (Chrome, Moodle 5.1): after a blocked paste the undo depth is unchanged and
+ * the next undo reverts the user's own prior typing, not a phantom empty step.
+ * In practice the native paste handler cancels the paste before this runs; this
+ * path applies when only paste_preprocess fires.
  *
  * @param {TinyMCE.Editor} editor The editor instance.
  * @param {Object} args The PastePreProcess event ({content, internal, ...}).

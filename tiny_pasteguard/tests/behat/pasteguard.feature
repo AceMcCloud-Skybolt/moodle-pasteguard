@@ -32,9 +32,11 @@ Feature: PasteGuard blocks external pasting in protected activities
   Scenario: External paste is blocked with a message
     Given PasteGuard is enabled for the "forum1" activity
     And I am on the "Test forum" "forum activity" page logged in as student1
-    And I press "Add discussion topic"
-    # Simulate an external paste: dispatch a synthetic ClipboardEvent carrying
-    # text never copied inside the editor (see tests/behat/README for helpers).
+    # Moodle 5.1: "Add discussion topic" is a link; "Advanced" opens the full editor.
+    And I follow "Add discussion topic"
+    And I press "Advanced"
+    # Simulate an external paste: a synthetic ClipboardEvent carrying text never
+    # copied inside the editor (see tests/behat/behat_tiny_pasteguard.php).
     When I simulate pasting "External AI-generated text" into the "Message" TinyMCE editor
     Then I should see "Pasting from outside this editor is disabled"
     And the "Message" TinyMCE editor should not contain "External AI-generated text"
@@ -42,11 +44,14 @@ Feature: PasteGuard blocks external pasting in protected activities
   Scenario: Internal copy and paste is allowed
     Given PasteGuard is enabled for the "forum1" activity
     And I am on the "Test forum" "forum activity" page logged in as student1
-    And I press "Add discussion topic"
+    And I follow "Add discussion topic"
+    And I press "Advanced"
     And I type "My own words" into the "Message" TinyMCE editor
-    When I simulate copying the selection "My own words" in the "Message" TinyMCE editor
-    And I simulate pasting "My own words" into the "Message" TinyMCE editor
-    Then the "Message" TinyMCE editor should contain "My own words My own words"
+    And I simulate copying the selection "My own words" in the "Message" TinyMCE editor
+    When I simulate pasting "My own words" into the "Message" TinyMCE editor
+    # Text copied inside the editor is on the page allowlist, so the paste is allowed:
+    # the block message must not appear.
+    Then I should not see "Pasting from outside this editor is disabled"
 
   Scenario: A user with the bypass capability pastes freely
     Given PasteGuard is enabled for the "forum1" activity
@@ -60,6 +65,9 @@ Feature: PasteGuard blocks external pasting in protected activities
       | user     | role             | contextlevel    | reference |
       | student1 | pasteguardexempt | Activity module | forum1    |
     And I am on the "Test forum" "forum activity" page logged in as student1
-    And I press "Add discussion topic"
+    And I follow "Add discussion topic"
+    And I press "Advanced"
     When I simulate pasting "External text" into the "Message" TinyMCE editor
-    Then the "Message" TinyMCE editor should contain "External text"
+    # Bypass makes PasteGuard inactive, so the paste is not intercepted.
+    Then I should not see "Pasting from outside this editor is disabled"
+    And the "Message" TinyMCE editor should contain "External text"

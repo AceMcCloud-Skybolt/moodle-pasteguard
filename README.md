@@ -37,23 +37,25 @@ of content, not *access* to AI — that remains Safe Exam Browser / supervised
 assessment territory. Institutional guidance: short tasks only, not
 essays/reports.
 
-**The internal-clipboard marker is a real hole, not just "forgeable".** To let
-students move their own text around, PasteGuard treats any paste that TinyMCE
-flags as *internal* as allowed. TinyMCE sets that flag from a marker it writes
-into the **clipboard itself** (an `x-tinymce/html` MIME type and an
-`<!-- x-tinymce/html -->` comment inside the copied HTML), not from anything
-tied to this editor or this page. Consequences a teacher must understand:
+**How "your own text" is recognised, and where the limits are.** To let
+students move their own text around, PasteGuard keeps a page-scoped record of
+the most recent cut/copy made inside a protected editor, and a paste is allowed
+only when its plain text exactly matches that record. This comparison — not
+TinyMCE's internal-clipboard marker — is the gate that actually decides each
+paste: the native paste handler reads the incoming plain text and blocks
+anything not already copied on this page. Consequences a teacher should
+understand:
 
 - Copying inside one protected editor and pasting into another editor on the
-  same page is allowed by design (this is the marker doing its job).
-- But the marker travels with the clipboard **across pages and across sites**.
-  Anything copied from *any* TinyMCE-backed editor — another Moodle, a
-  different site, a local test page — arrives flagged as internal and is
-  **allowed without ever reaching PasteGuard's own text comparison**. A student
-  who pastes AI output through a throwaway TinyMCE editor bypasses the check
-  entirely. This is TinyMCE's clipboard semantics, and the plugin's page-scoped
-  text comparison only backstops *plain-text* pastes, which carry no marker.
-- The marker is also client-side data a student could forge with devtools.
+  **same page** is allowed by design (both share the page record).
+- Content copied on a **different page or site** is *not* on this page's record,
+  so it is blocked like any other outside content — including text copied from
+  another TinyMCE editor. (Testing of this behaviour so far is verified for the
+  block-on-mismatch path; a definitive cross-site copy/paste check is still
+  worth running in a supervised browser.)
+- The comparison is client-side, so the bypasses listed above (retyping,
+  devtools, extensions, disabling JavaScript) all still defeat it. That is the
+  point of the "deterrent, not wall" framing.
 
 Do not present PasteGuard as closing the AI-paste channel; it raises friction
 for casual copy-paste and nothing more.
