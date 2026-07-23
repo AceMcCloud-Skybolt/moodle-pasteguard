@@ -16,9 +16,12 @@
 /**
  * Unit tests for tiny_pasteguard/comparison.
  *
- * Run with: node --test tiny_pasteguard/tests/js/
- * (requires Node >= 22; no dependencies. In node there is no DOMParser, so
- * the HTML path exercises the regex fallback in stripHtml.)
+ * Run with: node --test tiny_pasteguard/tests/js/comparison.test.mjs
+ * (requires Node >= 22; no dependencies.)
+ *
+ * The HTML stripper is injected explicitly in each test rather than relying on
+ * ambient DOMParser presence, so both the production (DOMParser) semantics and
+ * the node regex fallback are exercised deterministically.
  *
  * @copyright   2026 Murdoch Business School
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
@@ -26,14 +29,29 @@
 
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {normalise, matches, MAXCOMPARELENGTH} from '../../amd/src/comparison.js';
+import {
+    normalise,
+    matches,
+    stripHtmlRegex,
+    MAXCOMPARELENGTH,
+} from '../../amd/src/comparison.js';
+
+// Stand-in for the browser DOMParser path. In a real browser,
+// `new DOMParser().parseFromString(html, 'text/html').body.textContent`
+// concatenates text nodes with NO inserted whitespace; for markup without
+// entities or scripts that equals stripping tags and inserting nothing.
+// This lets the node harness drive the production semantics without jsdom.
+const stripHtmlDomLike = (html) => html.replace(/<[^>]*>/g, '');
 
 test('normalise collapses whitespace runs to single spaces', () => {
     assert.equal(normalise("one\n  two\t\tthree   four"), 'one two three four');
 });
 
 test('normalise collapses non-breaking spaces (U+00A0)', () => {
-    assert.equal(normalise('one two  three'), 'one two three');
+    // Build the input from escapes so the NBSP bytes cannot be lost in editing.
+    const input = 'one two  three';
+    assert.ok(input.includes(' '));
+    assert.equal(normalise(input), 'one two three');
 });
 
 test('normalise trims leading and trailing whitespace', () => {
@@ -41,27 +59,69 @@ test('normalise trims leading and trailing whitespace', () => {
 });
 
 test('normalise applies NFC so composed and decomposed forms compare equal', () => {
-    const composed = 'café';
-    const decomposed = 'café';
+    const composed = 'café';        // é as a single code point (U+00E9).
+    const decomposed = 'café';     // e + combining acute (U+0065 U+0301).
+    // Guard: the two inputs must be genuinely different byte sequences,
+    // otherwise this test would pass vacuously.
+    assert.notEqual(composed, decomposed);
     assert.equal(normalise(decomposed), normalise(composed));
 });
 
-test('normalise strips HTML markup when isHtml is set', () => {
-    assert.equal(normalise('<p>one <strong>two</strong></p><ul><li>three</li></ul>', true), 'one two three');
+test('regex and DOM HTML strippers diverge on adjacent tags (pinned)', () => {
+    const html = '<b>bold</b>words';
+    // Regex fallback (node, non-browser): each tag becomes a space.
+    assert.equal(normalise(html, true, stripHtmlRegex), 'bold words');
+    // DOMParser (production, browser): textContent concatenates, no space.
+    assert.equal(normalise(html, true, stripHtmlDomLike), 'boldwords');
+    // The divergence is real and intended to be visible: if someone changes
+    // stripHtmlRegex to also concatenate, this assertion fails and flags it.
+    assert.notEqual(
+        normalise(html, true, stripHtmlRegex),
+        normalise(html, true, stripHtmlDomLike)
+    );
 });
 
-test('HTML and plain-text forms of the same content normalise identically', () => {
+test('DOM stripper (production) concatenates adjacent block text', () => {
+    // Documents that a pasted list normalises without spaces between items
+    // under production DOMParser semantics.
+    const html = '<p>one <strong>two</strong></p><ul><li>three</li></ul>';
+    assert.equal(normalise(html, true, stripHtmlDomLike), 'one twothree');
+    // The regex fallback would instead yield 'one two three'.
+    assert.equal(normalise(html, true, stripHtmlRegex), 'one two three');
+});
+
+test('HTML and plain-text forms normalise identically when spacing is explicit', () => {
+    // Where the source HTML already has whitespace between text runs, both
+    // strippers agree with the plain-text form.
     const plain = 'bold words and a list item';
     const html = '<p><b>bold words</b> and a <a href="https://example.com">list item</a></p>';
-    assert.equal(normalise(html, true), normalise(plain));
+    assert.equal(normalise(html, true, stripHtmlDomLike), normalise(plain));
+    assert.equal(normalise(html, true, stripHtmlRegex), normalise(plain));
 });
 
-test('normalise truncates both sides identically at the cap', () => {
-    const long = 'a'.repeat(MAXCOMPARELENGTH + 500);
-    const alsoLong = 'a'.repeat(MAXCOMPARELENGTH + 900);
-    assert.equal(normalise(long).length, MAXCOMPARELENGTH);
-    // Equality is preserved under symmetric truncation.
-    assert.equal(normalise(long), normalise(alsoLong));
+test('truncation caps normalised length at MAXCOMPARELENGTH', () => {
+    assert.equal(normalise('a'.repeat(MAXCOMPARELENGTH + 500)).length, MAXCOMPARELENGTH);
+});
+
+test('a normalised string matches its own truncation', () => {
+    const s = normalise('a'.repeat(MAXCOMPARELENGTH + 500));
+    assert.equal(matches(s, s), true);
+});
+
+test('strings differing within the first 100 KB do not match', () => {
+    const a = normalise('a'.repeat(MAXCOMPARELENGTH - 1) + 'X');
+    const b = normalise('a'.repeat(MAXCOMPARELENGTH - 1) + 'Y');
+    assert.notEqual(a, b);
+    assert.equal(matches(a, b), false);
+});
+
+test('KNOWN LIMITATION: inputs sharing a >100 KB prefix collide after truncation', () => {
+    // Two distinct inputs differing only beyond the cap normalise identically.
+    // This is a documented weakness of the length cap, not desired behaviour.
+    const a = normalise('a'.repeat(MAXCOMPARELENGTH) + 'external tail one');
+    const b = normalise('a'.repeat(MAXCOMPARELENGTH) + 'different tail two');
+    assert.equal(a, b);
+    assert.equal(matches(a, b), true);
 });
 
 test('normalise handles null/undefined input', () => {
@@ -91,10 +151,4 @@ test('empty incoming content is never allowed', () => {
 
 test('null allowlist (no internal copy yet) never matches', () => {
     assert.equal(matches(null, 'anything'), false);
-});
-
-test('formatted internal copy matches its plain-text paste equivalent', () => {
-    const copied = normalise('One  two\nthree');
-    const pasted = normalise('<p>One <em>two</em></p><p>three</p>', true);
-    assert.equal(matches(copied, pasted), true);
 });

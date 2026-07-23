@@ -24,25 +24,49 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-// Cap comparison strings to bound memory for pathological selections. Both
-// sides are truncated identically so equality is preserved.
+// Cap comparison strings to bound memory for pathological selections. Known
+// limitation: two distinct inputs sharing an identical first 100 KB collide
+// after truncation and will compare equal. Acceptable for the deterrent model.
 export const MAXCOMPARELENGTH = 100000;
 
 /**
- * Strip HTML markup from a string, returning its text content.
+ * Strip HTML markup using DOMParser, returning textContent.
  *
- * Uses DOMParser where available (browsers); falls back to a tag-stripping
- * regex where it is not (unit tests under node).
+ * This is the production path: browsers always have DOMParser. textContent
+ * concatenates adjacent text nodes with NO inserted whitespace, so
+ * "<b>bold</b>words" becomes "boldwords" and "<li>a</li><li>b</li>" becomes
+ * "ab". Whitespace between text only survives where it exists in the source.
  *
  * @param {string} html The HTML input.
  * @returns {string}
  */
-const stripHtml = (html) => {
-    if (typeof DOMParser !== 'undefined') {
-        return new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
-    }
-    return html.replace(/<[^>]*>/g, ' ');
-};
+export const stripHtmlDom = (html) =>
+    new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
+
+/**
+ * Strip HTML markup with a tag-replacing regex, returning text with each tag
+ * replaced by a space.
+ *
+ * This is the fallback for environments without DOMParser (node unit tests).
+ * It DIVERGES from stripHtmlDom on adjacent tags: "<b>bold</b>words" becomes
+ * " bold words" (collapsing to "bold words"). Do not treat the two as
+ * equivalent — see comparison.test.mjs for the pinned divergence.
+ *
+ * @param {string} html The HTML input.
+ * @returns {string}
+ */
+export const stripHtmlRegex = (html) => html.replace(/<[^>]*>/g, ' ');
+
+/**
+ * The default stripper: DOMParser where available (production/browser),
+ * otherwise the regex fallback (node). Exposed via the normalise parameter so
+ * tests can drive a specific implementation deterministically.
+ *
+ * @param {string} html The HTML input.
+ * @returns {string}
+ */
+export const defaultStripHtml = (html) =>
+    (typeof DOMParser !== 'undefined' ? stripHtmlDom(html) : stripHtmlRegex(html));
 
 /**
  * Normalise text for comparison: strip HTML, collapse whitespace (including
@@ -50,9 +74,11 @@ const stripHtml = (html) => {
  *
  * @param {string} text Plain text or HTML.
  * @param {boolean} isHtml Whether the input should be parsed as HTML first.
+ * @param {function} stripHtml HTML stripper to use; defaults to DOMParser with
+ *   a regex fallback. Injectable so unit tests can exercise each path.
  * @returns {string}
  */
-export const normalise = (text, isHtml = false) => {
+export const normalise = (text, isHtml = false, stripHtml = defaultStripHtml) => {
     let plain = text || '';
     if (isHtml) {
         plain = stripHtml(plain);

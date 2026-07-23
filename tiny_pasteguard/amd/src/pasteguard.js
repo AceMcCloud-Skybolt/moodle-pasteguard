@@ -130,15 +130,15 @@ const currentDecision = (editor) => {
 };
 
 /**
- * Primary hook: TinyMCE paste_preprocess. Receives the incoming content and
- * cancels insertion by emptying it.
+ * Primary hook: TinyMCE PastePreProcess event. Receives the incoming content
+ * and cancels insertion by emptying it.
  *
  * Emptying args.content means TinyMCE inserts nothing; because the document
  * is unchanged, the undo manager should record no new level. This is asserted
  * by TESTING.md item 1 and must be confirmed in real browsers, not assumed.
  *
  * @param {TinyMCE.Editor} editor The editor instance.
- * @param {Object} args The paste_preprocess arguments ({content, internal, ...}).
+ * @param {Object} args The PastePreProcess event ({content, internal, ...}).
  */
 const handlePastePreprocess = (editor, args) => {
     // TinyMCE marks pastes from its own internal clipboard via a marker in the
@@ -251,16 +251,11 @@ const handleBeforeInput = (editor, event) => {
  * @param {TinyMCE.Editor} editor The editor instance.
  */
 export const setup = (editor) => {
-    // paste_preprocess is a single-slot option: chain any existing handler
-    // (core or another plugin) rather than clobbering it. PasteGuard runs
-    // first; the previous handler only sees pastes PasteGuard allowed.
-    const previous = editor.options.get('paste_preprocess');
-    editor.options.set('paste_preprocess', (ed, args) => {
-        handlePastePreprocess(editor, args);
-        if (args.content !== '' && typeof previous === 'function') {
-            previous(ed, args);
-        }
-    });
+    // PastePreProcess is a multi-listener editor event, so registering here
+    // cannot clobber core or other plugins' handlers regardless of plugin load
+    // order. (The older paste_preprocess option is single-slot and would need
+    // manual chaining that only works if PasteGuard initialises last.)
+    editor.on('PastePreProcess', (args) => handlePastePreprocess(editor, args));
 
     editor.on('cut', () => captureInternalCopy(editor));
     editor.on('copy', () => captureInternalCopy(editor));
