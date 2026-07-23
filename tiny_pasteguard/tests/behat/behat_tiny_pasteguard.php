@@ -179,9 +179,13 @@ JS);
      * @return string
      */
     private function get_editor_text(string $field): string {
-        return (string) $this->evaluate_script($this->editor_lookup_js($field) . <<<JS
-            return editor.getContent({format: 'text'});
-JS);
+        // The evaluate_script helper wraps a script that does not start with
+        // "return" as "return <script>", which breaks on the leading `const`.
+        // Start with "return" and wrap the lookup in an IIFE so the const
+        // bindings get a valid function scope.
+        $script = 'return (function() {' . $this->editor_lookup_js($field)
+            . " return editor.getContent({format: 'text'}); })();";
+        return (string) $this->evaluate_script($script);
     }
 
     /**

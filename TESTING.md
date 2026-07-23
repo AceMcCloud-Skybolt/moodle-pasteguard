@@ -1,5 +1,15 @@
 # PasteGuard manual test script
 
+> Verified so far (Chrome, Moodle 5.1, real student session): items 1
+> (external paste blocked + notification), 4 (internal copy→paste allowed via
+> the page allowlist), and the undo behaviour in item 1 (a blocked paste adds
+> no undo level; the first undo reverts the user's own typing). PasteGuard
+> activation was also confirmed to reach the editor in the forum module
+> context; assignment online-text and quiz/lesson essay editors render in the
+> same module context by code, so they activate identically. Still to run in a
+> supervised browser: styled Word paste, middle-click, drag-drop, draft
+> restore, and a genuine cross-site copy/paste.
+
 Run in Chrome, Firefox and Edge unless a case says otherwise. Setup: site
 setting *enabled* on, defaults elsewhere; a forum with PasteGuard ticked; a
 quiz with two essay questions and PasteGuard ticked; one assignment with
