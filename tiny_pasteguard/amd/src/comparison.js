@@ -29,19 +29,37 @@
 // after truncation and will compare equal. Acceptable for the deterrent model.
 export const MAXCOMPARELENGTH = 100000;
 
+// Block-level (and line-break) elements after which a whitespace boundary is
+// inserted before reading textContent, so adjacent blocks do not fuse. This
+// makes HTML normalisation agree with TinyMCE's getContent({format: 'text'}),
+// which separates blocks with newlines.
+const BLOCKSELECTOR = [
+    'address', 'article', 'aside', 'blockquote', 'br', 'dd', 'div', 'dl', 'dt',
+    'figure', 'figcaption', 'footer', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+    'header', 'hr', 'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table',
+    'tbody', 'td', 'th', 'thead', 'tr', 'ul',
+].join(',');
+
 /**
- * Strip HTML markup using DOMParser, returning textContent.
+ * Strip HTML markup using DOMParser, returning textContent with a whitespace
+ * boundary inserted after every block-level element.
  *
- * This is the production path: browsers always have DOMParser. textContent
- * concatenates adjacent text nodes with NO inserted whitespace, so
- * "<b>bold</b>words" becomes "boldwords" and "<li>a</li><li>b</li>" becomes
- * "ab". Whitespace between text only survives where it exists in the source.
+ * This is the production path: browsers always have DOMParser. Plain textContent
+ * concatenates adjacent text nodes with no separator, so "<li>a</li><li>b</li>"
+ * would become "ab"; inserting a boundary after each block yields "a b", which
+ * matches the newline-separated output of getContent({format: 'text'}) once
+ * whitespace is collapsed. Inline tags still fuse: "<b>bold</b>words" -> "boldwords".
  *
  * @param {string} html The HTML input.
  * @returns {string}
  */
-export const stripHtmlDom = (html) =>
-    new DOMParser().parseFromString(html, 'text/html').body.textContent || '';
+export const stripHtmlDom = (html) => {
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.body.querySelectorAll(BLOCKSELECTOR).forEach((el) => {
+        el.insertAdjacentText('afterend', ' ');
+    });
+    return doc.body.textContent || '';
+};
 
 /**
  * Strip HTML markup with a tag-replacing regex, returning text with each tag

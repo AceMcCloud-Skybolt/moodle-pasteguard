@@ -141,10 +141,29 @@ const currentDecision = (editor) => {
  * @param {Object} args The PastePreProcess event ({content, internal, ...}).
  */
 const handlePastePreprocess = (editor, args) => {
-    // TinyMCE marks pastes from its own internal clipboard via a marker in the
-    // clipboard payload. The marker is client-side and forgeable with devtools,
-    // consistent with the plugin's deterrent (not enforcement) threat model —
-    // see "Honest limitations" in the README.
+    // The native paste handler runs first (prepended 'paste' listener) and may
+    // already have reached a verdict on this same paste. Honour it rather than
+    // re-evaluating the HTML, which could overturn a plain-text allow.
+    const decision = currentDecision(editor);
+    if (decision === true) {
+        return;
+    }
+    if (decision === false) {
+        // Native handler already blocked and reported; just ensure nothing is
+        // inserted, without a second block report.
+        args.content = '';
+        return;
+    }
+
+    // TinyMCE marks pastes from its own internal clipboard via the
+    // 'x-tinymce/html' mime and a '<!-- x-tinymce/html -->' comment embedded in
+    // text/html (tinymce.js setHtml5Clipboard / getData). That marker is
+    // clipboard-scoped, not editor-scoped, so a copy from one editor pasted into
+    // a different editor on the same page arrives with args.internal === true —
+    // this is what carries §3 edge case 1 for rich pastes (the page-scoped
+    // allowlist is the backstop for plain-text-only pastes). The marker is
+    // client-side and forgeable with devtools, consistent with the plugin's
+    // deterrent (not enforcement) threat model — see "Honest limitations".
     if (args.internal) {
         recordDecision(editor, true);
         return;

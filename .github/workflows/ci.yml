@@ -10,8 +10,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Install JS test dependencies (jsdom)
+        run: npm ci
       - name: JS unit tests (tiny_pasteguard comparison module)
-        run: node --test tiny_pasteguard/tests/js/comparison.test.mjs
+        run: npm test
 
   ci:
     runs-on: ubuntu-22.04

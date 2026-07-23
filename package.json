@@ -1,0 +1,13 @@
+{
+  "name": "moodle-pasteguard",
+  "version": "0.1.0",
+  "description": "PasteGuard Moodle plugins — JS unit test harness (not part of the Moodle AMD build).",
+  "private": true,
+  "license": "GPL-3.0-or-later",
+  "scripts": {
+    "test": "node --test tiny_pasteguard/tests/js/"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.0"
+  }
+}
