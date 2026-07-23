@@ -38,7 +38,7 @@ jobs:
           - 3306:3306
         options: --health-cmd="mariadb-admin ping" --health-interval 10s --health-timeout 5s --health-retries 3
       postgres:
-        image: postgres:14
+        image: postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_HOST_AUTH_METHOD: trust
@@ -63,6 +63,7 @@ jobs:
         with:
           php-version: ${{ matrix.php }}
           extensions: pgsql, mysqli, zip, gd, xmlrpc, soap, intl
+          ini-values: max_input_vars=5000
           coverage: none
 
       - name: Install moodle-plugin-ci
