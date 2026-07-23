@@ -5,7 +5,7 @@
   "private": true,
   "license": "GPL-3.0-or-later",
   "scripts": {
-    "test": "node --test tiny_pasteguard/tests/js/"
+    "test": "node --test \"tiny_pasteguard/tests/js/*.test.mjs\""
   },
   "devDependencies": {
     "jsdom": "^24.1.0"

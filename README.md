@@ -32,12 +32,31 @@ long-form writing tasks — intended for short posts and responses only.
 
 This is a **deterrent, not a wall**. It is trivially bypassed by retyping
 from a second screen, browser devtools, extensions, or disabling JavaScript
-(the unprotected plain-textarea fallback then applies). In particular,
-TinyMCE's own internal-clipboard marker is trusted as an allow signal and is
-client-side data a student could forge with devtools. It blocks *transfer*
+(the unprotected plain-textarea fallback then applies). It blocks *transfer*
 of content, not *access* to AI — that remains Safe Exam Browser / supervised
 assessment territory. Institutional guidance: short tasks only, not
 essays/reports.
+
+**The internal-clipboard marker is a real hole, not just "forgeable".** To let
+students move their own text around, PasteGuard treats any paste that TinyMCE
+flags as *internal* as allowed. TinyMCE sets that flag from a marker it writes
+into the **clipboard itself** (an `x-tinymce/html` MIME type and an
+`<!-- x-tinymce/html -->` comment inside the copied HTML), not from anything
+tied to this editor or this page. Consequences a teacher must understand:
+
+- Copying inside one protected editor and pasting into another editor on the
+  same page is allowed by design (this is the marker doing its job).
+- But the marker travels with the clipboard **across pages and across sites**.
+  Anything copied from *any* TinyMCE-backed editor — another Moodle, a
+  different site, a local test page — arrives flagged as internal and is
+  **allowed without ever reaching PasteGuard's own text comparison**. A student
+  who pastes AI output through a throwaway TinyMCE editor bypasses the check
+  entirely. This is TinyMCE's clipboard semantics, and the plugin's page-scoped
+  text comparison only backstops *plain-text* pastes, which carry no marker.
+- The marker is also client-side data a student could forge with devtools.
+
+Do not present PasteGuard as closing the AI-paste channel; it raises friction
+for casual copy-paste and nothing more.
 
 ## How it works
 
