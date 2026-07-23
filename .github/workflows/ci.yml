@@ -3,6 +3,16 @@ name: Moodle Plugin CI
 on: [push, pull_request]
 
 jobs:
+  jsunit:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: JS unit tests (tiny_pasteguard comparison module)
+        run: node --test tiny_pasteguard/tests/js/comparison.test.mjs
+
   ci:
     runs-on: ubuntu-22.04
 

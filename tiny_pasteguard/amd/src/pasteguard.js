@@ -27,12 +27,9 @@
  * @license     http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
+import {normalise, matches} from './comparison';
 import {getBlockMessage, getContextId, shouldLogEvents} from './options';
 import {logBlock} from './repository';
-
-// Cap comparison strings to bound memory for pathological selections. Both
-// sides are truncated identically so equality is preserved.
-const MAXCOMPARELENGTH = 100000;
 
 // Minimum interval between log calls per editor.
 const LOGTHROTTLEMS = 10000;
@@ -50,27 +47,6 @@ const state = {
 };
 
 /**
- * Normalise text for comparison: strip HTML, collapse whitespace (including
- * non-breaking spaces and newlines) to single spaces, trim, NFC normalise.
- *
- * @param {string} text Plain text or HTML.
- * @param {boolean} isHtml Whether the input should be parsed as HTML first.
- * @returns {string}
- */
-export const normalise = (text, isHtml = false) => {
-    let plain = text || '';
-    if (isHtml) {
-        plain = new DOMParser().parseFromString(plain, 'text/html').body.textContent || '';
-    }
-    // \s matches all Unicode whitespace including non-breaking spaces (U+00A0).
-    return plain
-        .replace(/\s+/g, ' ')
-        .trim()
-        .normalize('NFC')
-        .substring(0, MAXCOMPARELENGTH);
-};
-
-/**
  * Record an internal cut/copy in the page-scoped allowlist.
  *
  * @param {TinyMCE.Editor} editor The editor instance.
@@ -81,21 +57,13 @@ const captureInternalCopy = (editor) => {
 };
 
 /**
- * Decide whether incoming content is the student's own internal copy.
+ * Decide whether incoming (already normalised) content is the student's own
+ * internal copy.
  *
  * @param {string} incoming Normalised incoming text.
  * @returns {boolean}
  */
-const isAllowed = (incoming) => {
-    if (incoming === '') {
-        // Nothing textual to compare (e.g. image-only clipboard): block, as we
-        // cannot establish provenance.
-        return false;
-    }
-    // Exact match only: substring matching would let one internal word licence
-    // an external paragraph containing it.
-    return state.internalClipboard !== null && incoming === state.internalClipboard;
-};
+const isAllowed = (incoming) => matches(state.internalClipboard, incoming);
 
 /**
  * Show the block message via the TinyMCE notification manager, degrading
@@ -163,13 +131,20 @@ const currentDecision = (editor) => {
 
 /**
  * Primary hook: TinyMCE paste_preprocess. Receives the incoming content and
- * can cancel insertion by emptying it.
+ * cancels insertion by emptying it.
+ *
+ * Emptying args.content means TinyMCE inserts nothing; because the document
+ * is unchanged, the undo manager should record no new level. This is asserted
+ * by TESTING.md item 1 and must be confirmed in real browsers, not assumed.
  *
  * @param {TinyMCE.Editor} editor The editor instance.
  * @param {Object} args The paste_preprocess arguments ({content, internal, ...}).
  */
 const handlePastePreprocess = (editor, args) => {
-    // TinyMCE marks pastes originating from its own internal clipboard.
+    // TinyMCE marks pastes from its own internal clipboard via a marker in the
+    // clipboard payload. The marker is client-side and forgeable with devtools,
+    // consistent with the plugin's deterrent (not enforcement) threat model —
+    // see "Honest limitations" in the README.
     if (args.internal) {
         recordDecision(editor, true);
         return;
@@ -182,14 +157,14 @@ const handlePastePreprocess = (editor, args) => {
     recordDecision(editor, false);
     const charcount = incoming.length || String(args.content || '').length;
     args.content = '';
-    // A cancelled paste must not leave an undo step or placeholder.
-    args.preventDefault?.();
     reportBlock(editor, charcount);
 };
 
 /**
  * Backstop: native paste event on the editor body. Catches paths where
- * paste_preprocess is not invoked.
+ * paste_preprocess is not invoked. Blocked pastes are cancelled with
+ * preventDefault only — propagation is not stopped, so other plugins still
+ * observe the (cancelled) event.
  *
  * @param {TinyMCE.Editor} editor The editor instance.
  * @param {ClipboardEvent} event The native paste event.
@@ -199,7 +174,6 @@ const handleNativePaste = (editor, event) => {
     if (decision !== null) {
         if (!decision) {
             event.preventDefault();
-            event.stopImmediatePropagation();
         }
         return;
     }
@@ -211,7 +185,6 @@ const handleNativePaste = (editor, event) => {
     }
     recordDecision(editor, false);
     event.preventDefault();
-    event.stopImmediatePropagation();
     reportBlock(editor, incoming.length);
 };
 
@@ -278,8 +251,16 @@ const handleBeforeInput = (editor, event) => {
  * @param {TinyMCE.Editor} editor The editor instance.
  */
 export const setup = (editor) => {
-    // Cancel external pastes before TinyMCE inserts them.
-    editor.options.set('paste_preprocess', (unused, args) => handlePastePreprocess(editor, args));
+    // paste_preprocess is a single-slot option: chain any existing handler
+    // (core or another plugin) rather than clobbering it. PasteGuard runs
+    // first; the previous handler only sees pastes PasteGuard allowed.
+    const previous = editor.options.get('paste_preprocess');
+    editor.options.set('paste_preprocess', (ed, args) => {
+        handlePastePreprocess(editor, args);
+        if (args.content !== '' && typeof previous === 'function') {
+            previous(ed, args);
+        }
+    });
 
     editor.on('cut', () => captureInternalCopy(editor));
     editor.on('copy', () => captureInternalCopy(editor));

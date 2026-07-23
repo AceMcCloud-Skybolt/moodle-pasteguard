@@ -32,7 +32,9 @@ long-form writing tasks — intended for short posts and responses only.
 
 This is a **deterrent, not a wall**. It is trivially bypassed by retyping
 from a second screen, browser devtools, extensions, or disabling JavaScript
-(the unprotected plain-textarea fallback then applies). It blocks *transfer*
+(the unprotected plain-textarea fallback then applies). In particular,
+TinyMCE's own internal-clipboard marker is trusted as an allow signal and is
+client-side data a student could forge with devtools. It blocks *transfer*
 of content, not *access* to AI — that remains Safe Exam Browser / supervised
 assessment territory. Institutional guidance: short tasks only, not
 essays/reports.

@@ -62,11 +62,20 @@ class log_block extends external_api {
         }
 
         if (isguestuser()) {
-            throw new \required_capability_exception($context, 'tiny/pasteguard:use', 'nopermissions', '');
+            throw new \moodle_exception('noguest');
         }
 
         // Only log when the site has opted in.
         if (!get_config('tiny_pasteguard', 'logevents')) {
+            return ['logged' => false];
+        }
+
+        // Only log for course modules where PasteGuard is actually enabled,
+        // so arbitrary authenticated POSTs cannot pollute the logs.
+        if (
+            !class_exists('\local_pasteguard\api')
+                || !\local_pasteguard\api::is_enabled_for_cm((int) $context->instanceid)
+        ) {
             return ['logged' => false];
         }
 

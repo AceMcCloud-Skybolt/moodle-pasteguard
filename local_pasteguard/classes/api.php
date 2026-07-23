@@ -33,7 +33,13 @@ class api {
     public static function is_enabled_for_cm(int $cmid): bool {
         global $DB;
 
-        return (bool) $DB->get_field('local_pasteguard', 'enabled', ['cmid' => $cmid]);
+        try {
+            return (bool) $DB->get_field('local_pasteguard', 'enabled', ['cmid' => $cmid]);
+        } catch (\dml_exception $e) {
+            // The table may not exist yet if the plugin files are deployed but
+            // the upgrade has not run. Fail closed rather than fatal the editor.
+            return false;
+        }
     }
 
     /**

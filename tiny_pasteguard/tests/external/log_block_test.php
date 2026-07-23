@@ -41,6 +41,7 @@ final class log_block_test extends \externallib_advanced_testcase {
     private function setup_forum(): array {
         $course = $this->getDataGenerator()->create_course();
         $forum = $this->getDataGenerator()->create_module('forum', ['course' => $course->id]);
+        \local_pasteguard\api::set_for_cm((int) $forum->cmid, true);
 
         return [context_module::instance($forum->cmid), $this->getDataGenerator()->create_and_enrol($course, 'student')];
     }
@@ -80,6 +81,27 @@ final class log_block_test extends \externallib_advanced_testcase {
         $this->resetAfterTest();
         set_config('logevents', 0, 'tiny_pasteguard');
         [$context, $student] = $this->setup_forum();
+        $this->setUser($student);
+
+        $sink = $this->redirectEvents();
+        $result = external_api::clean_returnvalue(
+            log_block::execute_returns(),
+            log_block::execute($context->id, 10)
+        );
+        $this->assertFalse($result['logged']);
+        $this->assertCount(0, $sink->get_events());
+        $sink->close();
+    }
+
+    /**
+     * No event is written for a course module where PasteGuard is not enabled,
+     * even with site logging on.
+     */
+    public function test_no_event_when_flag_not_set(): void {
+        $this->resetAfterTest();
+        set_config('logevents', 1, 'tiny_pasteguard');
+        [$context, $student] = $this->setup_forum();
+        \local_pasteguard\api::set_for_cm((int) $context->instanceid, false);
         $this->setUser($student);
 
         $sink = $this->redirectEvents();

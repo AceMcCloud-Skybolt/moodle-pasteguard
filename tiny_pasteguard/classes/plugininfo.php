@@ -53,6 +53,14 @@ class plugininfo extends plugin implements plugin_with_configuration {
     ): array {
         $inactive = ['active' => false];
 
+        // The local_pasteguard plugin depends on this plugin, so Moodle cannot declare the
+        // reverse dependency. Without this guard, every editor on the site would
+        // fatal during the install window (or a tiny-only install) because the
+        // flag table does not exist yet.
+        if (!class_exists('\local_pasteguard\api')) {
+            return $inactive;
+        }
+
         if (!get_config('tiny_pasteguard', 'enabled')) {
             return $inactive;
         }
