@@ -158,15 +158,18 @@ const handlePastePreprocess = (editor, args) => {
         return;
     }
 
-    // TinyMCE marks pastes from its own internal clipboard via the
-    // 'x-tinymce/html' mime and a '<!-- x-tinymce/html -->' comment embedded in
-    // text/html (tinymce.js setHtml5Clipboard / getData). That marker is
-    // clipboard-scoped, not editor-scoped, so a copy from one editor pasted into
-    // a different editor on the same page arrives with args.internal === true —
-    // this is what carries §3 edge case 1 for rich pastes (the page-scoped
-    // allowlist is the backstop for plain-text-only pastes). The marker is
-    // client-side and forgeable with devtools, consistent with the plugin's
-    // deterrent (not enforcement) threat model — see "Honest limitations".
+    // Fallback for paste paths that do NOT fire a native 'paste' event (e.g.
+    // context menu, middle-click, some IME paths), where handleNativePaste never
+    // ran and no decision was recorded. TinyMCE flags such pastes as internal via
+    // the 'x-tinymce/html' mime / '<!-- x-tinymce/html -->' comment it writes to
+    // the clipboard. On the standard Ctrl+V path this branch is not reached:
+    // handleNativePaste runs first and either allows (recorded above as
+    // decision === true) or blocks (preventDefault -> TinyMCE bails on
+    // isDefaultPrevented, so PastePreProcess never fires). §3 edge case 1
+    // (cross-editor same-page paste) is carried by the page-scoped allowlist,
+    // NOT this marker — verified by real-hardware test (see TESTING.md, test D).
+    // The marker is client-side and forgeable; those non-native-paste paths are
+    // untested and remain a deterrent-model gap, not enforcement.
     if (args.internal) {
         recordDecision(editor, true);
         return;

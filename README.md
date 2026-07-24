@@ -50,9 +50,9 @@ understand:
   **same page** is allowed by design (both share the page record).
 - Content copied on a **different page or site** is *not* on this page's record,
   so it is blocked like any other outside content — including text copied from
-  another TinyMCE editor. (Testing of this behaviour so far is verified for the
-  block-on-mismatch path; a definitive cross-site copy/paste check is still
-  worth running in a supervised browser.)
+  another TinyMCE editor. This is verified by real-hardware test: marked
+  TinyMCE content pasted with an empty page allowlist is blocked (the clipboard
+  marker does not grant passage). See TESTING.md, test B.
 - The comparison is client-side, so the bypasses listed above (retyping,
   devtools, extensions, disabling JavaScript) all still defeat it. That is the
   point of the "deterrent, not wall" framing.
